@@ -2,6 +2,7 @@
 	"compilerOptions": {
 		"target": "es2018",
 		"lib": ["es2018", "dom"],
+		"composite": true,
 		"allowJs": true,
 		"checkJs": true,
 		"declaration": true,
