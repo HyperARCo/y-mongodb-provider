@@ -1,10 +1,11 @@
-const Y = require('yjs');
-const { MongoMemoryServer } = require('mongodb-memory-server');
-const { MongoClient } = require('mongodb');
+import * as Y from 'yjs';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoClient } from 'mongodb';
+import { describe, beforeAll, afterAll, it } from 'vitest';
 // I ignore it here because if you run "npm run test" it first builds the project and then runs the tests.
 // eslint-disable-next-line import/no-unresolved
-const { MongodbPersistence } = require('../dist/y-mongodb.cjs');
-const generateLargeText = require('./generateLargeText.js');
+import { MongodbPersistence } from '../src/y-mongodb.js';
+import generateLargeText from './generateLargeText.js';
 
 const storeDocWithText = async (mongodbPersistence, docName, content) => {
   const ydoc = new Y.Doc();

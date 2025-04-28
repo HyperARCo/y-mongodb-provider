@@ -1,4 +1,4 @@
-function generateLargeText(sizeInMb) {
+export default function generateLargeText(sizeInMb) {
   const sizeInBytes = sizeInMb * 1024 * 1024;
   const numberOfChars = Math.floor(sizeInBytes / 2); // JavaScript uses UTF-16 encoding, which uses 2 bytes per character
   let largeText = '';
@@ -7,5 +7,3 @@ function generateLargeText(sizeInMb) {
   }
   return largeText;
 }
-
-module.exports = generateLargeText;
