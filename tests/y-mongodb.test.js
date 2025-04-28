@@ -7,373 +7,386 @@ const { MongodbPersistence } = require('../dist/y-mongodb.cjs');
 const generateLargeText = require('./generateLargeText.js');
 
 const storeDocWithText = async (mongodbPersistence, docName, content) => {
-	const ydoc = new Y.Doc();
-	// to wait for the update to be stored in the database before we check
-	const updatePromise = new Promise((resolve) => {
-		ydoc.on('update', async (update) => {
-			await mongodbPersistence.storeUpdate(docName, update);
-			resolve();
-		});
-	});
+  const ydoc = new Y.Doc();
+  // to wait for the update to be stored in the database before we check
+  const updatePromise = new Promise((resolve) => {
+    ydoc.on('update', async (update) => {
+      await mongodbPersistence.storeUpdate(docName, update);
+      resolve();
+    });
+  });
 
-	const yText = ydoc.getText('name');
-	yText.insert(0, content);
+  const yText = ydoc.getText('name');
+  yText.insert(0, content);
 
-	// Wait for the update to be stored
-	await updatePromise;
+  // Wait for the update to be stored
+  await updatePromise;
 };
 
 describe('meta with single collection', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoConnection;
-	const docName = 'testDoc';
-	const collectionName = 'testCollection';
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const docName = 'testDoc';
+  const collectionName = 'testCollection';
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), { collectionName });
-		mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoConnection) {
-			await mongoConnection.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should store meta data', async () => {
-		const metaKey = 'testKey';
-		const expectedValue = 'testValue';
+  it('should store meta data', async () => {
+    const metaKey = 'testKey';
+    const expectedValue = 'testValue';
 
-		await mongodbPersistence.setMeta(docName, metaKey, expectedValue);
+    await mongodbPersistence.setMeta(docName, metaKey, expectedValue);
 
-		// Check if meta data is stored in the database via the native mongo client
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+    // Check if meta data is stored in the database via the native mongo client
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		expect(count).toEqual(1);
-	});
+    expect(count).toEqual(1);
+  });
 
-	it('should retrieve meta data', async () => {
-		const metaKey = 'testKey';
-		const expectedValue = 'testValue';
+  it('should retrieve meta data', async () => {
+    const metaKey = 'testKey';
+    const expectedValue = 'testValue';
 
-		const value = await mongodbPersistence.getMeta(docName, metaKey);
-		expect(value).toEqual(expectedValue);
-	});
+    const value = await mongodbPersistence.getMeta(docName, metaKey);
+    expect(value).toEqual(expectedValue);
+  });
 
-	it('should delete meta data', async () => {
-		const metaKey = 'testKey';
+  it('should delete meta data', async () => {
+    const metaKey = 'testKey';
 
-		await mongodbPersistence.delMeta(docName, metaKey);
+    await mongodbPersistence.delMeta(docName, metaKey);
 
-		const value = await mongodbPersistence.getMeta(docName, metaKey);
+    const value = await mongodbPersistence.getMeta(docName, metaKey);
 
-		expect(value).toEqual(undefined);
-	});
+    expect(value).toEqual(undefined);
+  });
 });
 
 describe('store and retrieve updates in single collection with connection uri', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoConnection;
-	const dbName = 'test';
-	const docName = 'testDoc';
-	const collectionName = 'testCollection';
-	const content = 'Testtext';
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const dbName = 'test';
+  const docName = 'testDoc';
+  const collectionName = 'testCollection';
+  const content = 'Testtext';
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		const connectionStr = `${mongoServer.getUri()}${dbName}`;
-		mongodbPersistence = new MongodbPersistence(connectionStr, { collectionName });
-		mongoConnection = await MongoClient.connect(connectionStr, {});
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    const connectionStr = `${mongoServer.getUri()}${dbName}`;
+    mongodbPersistence = new MongodbPersistence(connectionStr, {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(connectionStr, {});
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoConnection) {
-			await mongoConnection.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should store updates', async () => {
-		await storeDocWithText(mongodbPersistence, docName, content);
+  it('should store updates', async () => {
+    await storeDocWithText(mongodbPersistence, docName, content);
 
-		// Check data is stored in the database via the native mongo client
-		const db = mongoConnection.db(dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+    // Check data is stored in the database via the native mongo client
+    const db = mongoConnection.db(dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		// it will be two because one is the stateVector and the other is the update
-		expect(count).toEqual(2);
-	});
+    // it will be two because one is the stateVector and the other is the update
+    expect(count).toEqual(2);
+  });
 
-	it('should retrieve stored docs', async () => {
-		const persistedYdoc = await mongodbPersistence.getYDoc(docName);
+  it('should retrieve stored docs', async () => {
+    const persistedYdoc = await mongodbPersistence.getYDoc(docName);
 
-		const yText = persistedYdoc.getText('name');
-		const yTextContent = yText.toString();
+    const yText = persistedYdoc.getText('name');
+    const yTextContent = yText.toString();
 
-		expect(yTextContent).toEqual(content);
-	});
+    expect(yTextContent).toEqual(content);
+  });
 
-	it('should store next update', async () => {
-		const nextContent = 'NextTestText';
+  it('should store next update', async () => {
+    const nextContent = 'NextTestText';
 
-		await storeDocWithText(mongodbPersistence, docName, nextContent);
+    await storeDocWithText(mongodbPersistence, docName, nextContent);
 
-		const db = mongoConnection.db(dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+    const db = mongoConnection.db(dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		// it will be four because one is the stateVector and the other two are the updates
-		expect(count).toEqual(3);
-	});
+    // it will be four because one is the stateVector and the other two are the updates
+    expect(count).toEqual(3);
+  });
 
-	it("should flush document's updates", async () => {
-		const db = mongoConnection.db(dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+  it("should flush document's updates", async () => {
+    const db = mongoConnection.db(dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		// it will be four because one is the stateVector and the other two are the updates
-		expect(count).toEqual(3);
+    // it will be four because one is the stateVector and the other two are the updates
+    expect(count).toEqual(3);
 
-		await mongodbPersistence.flushDocument(docName);
+    await mongodbPersistence.flushDocument(docName);
 
-		const secondCount = await collection.countDocuments();
-		expect(secondCount).toEqual(2);
-	});
+    const secondCount = await collection.countDocuments();
+    expect(secondCount).toEqual(2);
+  });
 });
 
 describe('store and retrieve updates in single collection with external MongoClient', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoClient;
-	const dbName = 'test';
-	const docName = 'testDoc';
-	const collectionName = 'testCollection';
-	const content = 'Testtext';
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoClient;
+  const dbName = 'test';
+  const docName = 'testDoc';
+  const collectionName = 'testCollection';
+  const content = 'Testtext';
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		mongoClient = new MongoClient(mongoServer.getUri());
-		await mongoClient.connect();
-		const db = mongoClient.db(dbName);
-		mongodbPersistence = new MongodbPersistence({ client: mongoClient, db }, { collectionName });
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongoClient = new MongoClient(mongoServer.getUri());
+    await mongoClient.connect();
+    const db = mongoClient.db(dbName);
+    mongodbPersistence = new MongodbPersistence(
+      { client: mongoClient, db },
+      { collectionName },
+    );
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoClient) {
-			await mongoClient.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoClient) {
+      await mongoClient.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should store updates', async () => {
-		await storeDocWithText(mongodbPersistence, docName, content);
+  it('should store updates', async () => {
+    await storeDocWithText(mongodbPersistence, docName, content);
 
-		// Check data is stored in the database via the native mongo client
-		const db = mongoClient.db(dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+    // Check data is stored in the database via the native mongo client
+    const db = mongoClient.db(dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		// it will be two because one is the stateVector and the other is the update
-		expect(count).toEqual(2);
-	});
+    // it will be two because one is the stateVector and the other is the update
+    expect(count).toEqual(2);
+  });
 
-	it('should retrieve stored docs', async () => {
-		const persistedYdoc = await mongodbPersistence.getYDoc(docName);
+  it('should retrieve stored docs', async () => {
+    const persistedYdoc = await mongodbPersistence.getYDoc(docName);
 
-		const yText = persistedYdoc.getText('name');
-		const yTextContent = yText.toString();
+    const yText = persistedYdoc.getText('name');
+    const yTextContent = yText.toString();
 
-		expect(yTextContent).toEqual(content);
-	});
+    expect(yTextContent).toEqual(content);
+  });
 });
 
 describe('clearDocument with single collection', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoConnection;
-	const docName = 'testDoc';
-	const collectionName = 'testCollection';
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const docName = 'testDoc';
+  const collectionName = 'testCollection';
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), { collectionName });
-		mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoConnection) {
-			await mongoConnection.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should clear document', async () => {
-		/* 1. Store Data */
-		await storeDocWithText(mongodbPersistence, docName, 'blablabla');
+  it('should clear document', async () => {
+    /* 1. Store Data */
+    await storeDocWithText(mongodbPersistence, docName, 'blablabla');
 
-		// Check data is stored in the database via the native mongo client
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
+    // Check data is stored in the database via the native mongo client
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
 
-		// it will be two because one is the stateVector and the other is the update
-		expect(count).toEqual(2);
+    // it will be two because one is the stateVector and the other is the update
+    expect(count).toEqual(2);
 
-		/* 2. Clear data */
-		await mongodbPersistence.clearDocument(docName);
+    /* 2. Clear data */
+    await mongodbPersistence.clearDocument(docName);
 
-		const secondCount = await collection.countDocuments();
-		expect(secondCount).toEqual(0);
-	});
+    const secondCount = await collection.countDocuments();
+    expect(secondCount).toEqual(0);
+  });
 });
 
 describe('store multiple documents in single collection', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoConnection;
-	const collectionName = 'testCollection';
-	const docNameOne = 'testDocOne';
-	const docNameTwo = 'testDocTwo';
-	const contentOne = 'TestOne';
-	const contentTwo = 'TestTwo';
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const collectionName = 'testCollection';
+  const docNameOne = 'testDocOne';
+  const docNameTwo = 'testDocTwo';
+  const contentOne = 'TestOne';
+  const contentTwo = 'TestTwo';
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), { collectionName });
-		mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoConnection) {
-			await mongoConnection.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should store two docs', async () => {
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
+  it('should store two docs', async () => {
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
 
-		/* Store first doc */
-		await storeDocWithText(mongodbPersistence, docNameOne, contentOne);
+    /* Store first doc */
+    await storeDocWithText(mongodbPersistence, docNameOne, contentOne);
 
-		// Check data is stored in the database via the native mongo client
-		const count = await collection.countDocuments();
-		// it will be two because one is the stateVector and the other is the update
-		expect(count).toEqual(2);
+    // Check data is stored in the database via the native mongo client
+    const count = await collection.countDocuments();
+    // it will be two because one is the stateVector and the other is the update
+    expect(count).toEqual(2);
 
-		/* Store second doc */
-		await storeDocWithText(mongodbPersistence, docNameTwo, contentTwo);
-		const countTwo = await collection.countDocuments();
-		expect(countTwo).toEqual(4);
-	});
+    /* Store second doc */
+    await storeDocWithText(mongodbPersistence, docNameTwo, contentTwo);
+    const countTwo = await collection.countDocuments();
+    expect(countTwo).toEqual(4);
+  });
 
-	it('getAllDocNames should return all doc names', async () => {
-		const docNames = await mongodbPersistence.getAllDocNames();
-		expect(docNames).toEqual([docNameOne, docNameTwo]);
-	});
+  it('getAllDocNames should return all doc names', async () => {
+    const docNames = await mongodbPersistence.getAllDocNames();
+    expect(docNames).toEqual([docNameOne, docNameTwo]);
+  });
 
-	it('should clear document one', async () => {
-		await mongodbPersistence.clearDocument(docNameOne);
+  it('should clear document one', async () => {
+    await mongodbPersistence.clearDocument(docNameOne);
 
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
-		expect(count).toEqual(2);
-	});
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
+    expect(count).toEqual(2);
+  });
 
-	it('should clear document two', async () => {
-		await mongodbPersistence.clearDocument(docNameTwo);
+  it('should clear document two', async () => {
+    await mongodbPersistence.clearDocument(docNameTwo);
 
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
-		expect(count).toEqual(0);
-	});
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
+    expect(count).toEqual(0);
+  });
 });
 
 describe('store 40mb of data in single collection', () => {
-	let mongoServer;
-	let mongodbPersistence;
-	let mongoConnection;
-	const collectionName = 'testCollection';
-	const docNameOne = 'docOne';
-	const content = generateLargeText(40);
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const collectionName = 'testCollection';
+  const docNameOne = 'docOne';
+  const content = generateLargeText(40);
 
-	beforeAll(async () => {
-		mongoServer = await MongoMemoryServer.create();
-		mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), { collectionName });
-		mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
-	});
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
 
-	afterAll(async () => {
-		if (mongodbPersistence) {
-			await mongodbPersistence.destroy();
-		}
-		if (mongoConnection) {
-			await mongoConnection.close();
-		}
-		if (mongoServer) {
-			await mongoServer.stop();
-		}
-	});
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
 
-	it('should store 40mb of text in three documents', async () => {
-		await storeDocWithText(mongodbPersistence, docNameOne, content);
+  it('should store 40mb of text in three documents', async () => {
+    await storeDocWithText(mongodbPersistence, docNameOne, content);
 
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
-		expect(count).toEqual(3);
-	});
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
+    expect(count).toEqual(3);
+  });
 
-	it("should retrieve the text of the stored document's updates", async () => {
-		const persistedYdoc = await mongodbPersistence.getYDoc(docNameOne);
+  it("should retrieve the text of the stored document's updates", async () => {
+    const persistedYdoc = await mongodbPersistence.getYDoc(docNameOne);
 
-		const yText = persistedYdoc.getText('name');
-		const yTextContent = yText.toString();
+    const yText = persistedYdoc.getText('name');
+    const yTextContent = yText.toString();
 
-		expect(yTextContent.length).toEqual(content.length);
-	});
+    expect(yTextContent.length).toEqual(content.length);
+  });
 
-	it("should clear the document's updates", async () => {
-		await mongodbPersistence.clearDocument(docNameOne);
+  it("should clear the document's updates", async () => {
+    await mongodbPersistence.clearDocument(docNameOne);
 
-		const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
-		const collection = db.collection(collectionName);
-		const count = await collection.countDocuments();
-		expect(count).toEqual(0);
-	});
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const count = await collection.countDocuments();
+    expect(count).toEqual(0);
+  });
 });
