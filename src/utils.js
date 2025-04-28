@@ -295,3 +295,15 @@ export const flushDocument = async (
   await clearUpdatesRange(db, docName, 0, clock);
   return clock;
 };
+
+/**
+ * Create a key for a document checkpoint.
+ * @param {string} docName
+ * @param {number} clock
+ * @return {{version: "v1_checkpoint"; docName: string; clock: number; }}
+ */
+export const createDocumentCheckpointKey = (docName, clock) => ({
+  version: 'v1_checkpoint',
+  docName,
+  clock,
+});

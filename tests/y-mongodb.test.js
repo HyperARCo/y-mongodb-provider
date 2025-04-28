@@ -391,3 +391,257 @@ describe('store 40mb of data in single collection', () => {
     expect(count).toEqual(0);
   });
 });
+
+describe('document checkpoints', () => {
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const collectionName = 'testCollection';
+  const docName = 'testCheckpointDoc';
+  const initialContent = 'Initial content';
+  const secondContent = ' - Additional content';
+  const thirdContent = ' - Final content';
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
+
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
+
+  it('should create a checkpoint at current state', async () => {
+    // Store initial content
+    await storeDocWithText(mongodbPersistence, docName, initialContent);
+
+    // Create a checkpoint and get its clock
+    const checkpoint = await mongodbPersistence.checkpoint(docName);
+
+    // Verify checkpoint is a number
+    expect(typeof checkpoint).toBe('number');
+    expect(checkpoint).toBeGreaterThan(0);
+
+    // Check database contains the checkpoint document
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+    const checkpointDoc = await collection.findOne({
+      docName,
+      version: 'v1_checkpoint',
+      clock: checkpoint,
+    });
+
+    expect(checkpointDoc).toBeTruthy();
+  });
+
+  it('should retrieve document at checkpoint state', async () => {
+    // Get the initial document state and create a checkpoint
+    const checkpoint1 = await mongodbPersistence.checkpoint(docName);
+
+    // Add more content to the document
+    const ydoc = await mongodbPersistence.getYDoc(docName);
+    const yText = ydoc.getText('name');
+    const updatePromise = new Promise((resolve) => {
+      ydoc.on('update', async (update) => {
+        await mongodbPersistence.storeUpdate(docName, update);
+        resolve();
+      });
+    });
+
+    yText.insert(yText.length, secondContent);
+    await updatePromise;
+
+    // Create another checkpoint
+    const checkpoint2 = await mongodbPersistence.checkpoint(docName);
+
+    // Add more content
+    const ydoc2 = await mongodbPersistence.getYDoc(docName);
+    const yText2 = ydoc2.getText('name');
+    const updatePromise2 = new Promise((resolve) => {
+      ydoc2.on('update', async (update) => {
+        await mongodbPersistence.storeUpdate(docName, update);
+        resolve();
+      });
+    });
+
+    yText2.insert(yText2.length, thirdContent);
+    await updatePromise2;
+
+    // Retrieve document at different checkpoints
+    const docAtCheckpoint1 = await mongodbPersistence.getYDoc(
+      docName,
+      checkpoint1,
+    );
+    const textAtCheckpoint1 = docAtCheckpoint1.getText('name').toString();
+    expect(textAtCheckpoint1).toEqual(initialContent);
+
+    const docAtCheckpoint2 = await mongodbPersistence.getYDoc(
+      docName,
+      checkpoint2,
+    );
+    const textAtCheckpoint2 = docAtCheckpoint2.getText('name').toString();
+    expect(textAtCheckpoint2).toEqual(initialContent + secondContent);
+
+    // Current document should have all content
+    const currentDoc = await mongodbPersistence.getYDoc(docName);
+    const currentText = currentDoc.getText('name').toString();
+    expect(currentText).toEqual(initialContent + secondContent + thirdContent);
+  });
+
+  it('should handle invalid checkpoint gracefully', async () => {
+    // Try to retrieve document with non-existent checkpoint
+    const invalidCheckpoint = 999999;
+
+    // Should fall back to latest version
+    const doc = await mongodbPersistence.getYDoc(docName, invalidCheckpoint);
+
+    // Document should still be accessible
+    expect(doc).toBeTruthy();
+    expect(doc.getText('name').toString()).toBeTruthy();
+  });
+});
+
+describe('checkpoint retrieval after update squashing', () => {
+  let mongoServer;
+  let mongodbPersistence;
+  let mongoConnection;
+  const collectionName = 'testCollection';
+  const docName = 'squashTestDoc';
+  const initialContent = 'Initial content';
+  const secondContent = ' - Additional content';
+
+  // Set a small flushSize to trigger automatic squashing
+  const flushSize = 3;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    mongodbPersistence = new MongodbPersistence(mongoServer.getUri(), {
+      collectionName,
+      flushSize: flushSize,
+    });
+    mongoConnection = await MongoClient.connect(mongoServer.getUri(), {});
+  });
+
+  afterAll(async () => {
+    if (mongodbPersistence) {
+      await mongodbPersistence.destroy();
+    }
+    if (mongoConnection) {
+      await mongoConnection.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  });
+
+  it('should preserve checkpoint state after document updates are squashed', async () => {
+    // Store initial content
+    await storeDocWithText(mongodbPersistence, docName, initialContent);
+
+    // Create a checkpoint at initial state
+    const checkpoint1 = await mongodbPersistence.checkpoint(docName);
+
+    // Verify database state
+    const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
+    const collection = db.collection(collectionName);
+
+    // Should have state vector, update, and checkpoint documents
+    let count = await collection.countDocuments({ docName });
+    expect(count).toBeGreaterThanOrEqual(3);
+
+    // Generate several small updates to trigger auto-squashing
+    const ydoc = await mongodbPersistence.getYDoc(docName);
+
+    // Make enough updates to trigger automatic squashing (flushSize + 1)
+    for (let i = 0; i < flushSize + 1; i++) {
+      const updatePromise = new Promise((resolve) => {
+        ydoc.on('update', async (update) => {
+          await mongodbPersistence.storeUpdate(docName, update);
+          resolve();
+        });
+      });
+
+      // Add a character each time
+      const yText = ydoc.getText('name');
+      yText.insert(yText.length, i.toString());
+      await updatePromise;
+    }
+
+    // Create another checkpoint after added content
+    const checkpoint2 = await mongodbPersistence.checkpoint(docName);
+
+    // Verify squashing happened - the number of documents should be reduced
+    const currentCount = await collection.countDocuments({
+      docName,
+      action: 'update',
+    });
+
+    // Count should be lower than the total number of updates we made
+    // This confirms squashing occurred
+    expect(currentCount).toBeLessThan(flushSize + 2); // +1 for original update + updates we made
+
+    // Now retrieve document at first checkpoint
+    const docAtCheckpoint1 = await mongodbPersistence.getYDoc(
+      docName,
+      checkpoint1,
+    );
+    const textAtCheckpoint1 = docAtCheckpoint1.getText('name').toString();
+
+    // Should still have only the initial content, despite squashing
+    expect(textAtCheckpoint1).toEqual(initialContent);
+
+    // Add more content
+    const finalYdoc = await mongodbPersistence.getYDoc(docName);
+    const finalUpdatePromise = new Promise((resolve) => {
+      finalYdoc.on('update', async (update) => {
+        await mongodbPersistence.storeUpdate(docName, update);
+        resolve();
+      });
+    });
+
+    const yText = finalYdoc.getText('name');
+    yText.insert(yText.length, secondContent);
+    await finalUpdatePromise;
+
+    // Force flush document to trigger squashing
+    await mongodbPersistence.flushDocument(docName);
+
+    // Verify we can still retrieve the checkpoint1 after an explicit flush
+    const docAfterFlush = await mongodbPersistence.getYDoc(
+      docName,
+      checkpoint1,
+    );
+    const textAfterFlush = docAfterFlush.getText('name').toString();
+
+    // Should still maintain the original content at checkpoint1
+    expect(textAfterFlush).toEqual(initialContent);
+
+    // Checkpoint2 should have initial content plus numeric updates, but not the final content
+    const docAtCheckpoint2 = await mongodbPersistence.getYDoc(
+      docName,
+      checkpoint2,
+    );
+    const textAtCheckpoint2 = docAtCheckpoint2.getText('name').toString();
+
+    // Should have initial content plus added numbers but not secondContent
+    expect(textAtCheckpoint2).not.toEqual(initialContent);
+    expect(textAtCheckpoint2.startsWith(initialContent)).toBeTruthy();
+    expect(textAtCheckpoint2.includes(secondContent)).toBeFalsy();
+
+    // Current document should have all content
+    const currentDoc = await mongodbPersistence.getYDoc(docName);
+    const currentText = currentDoc.getText('name').toString();
+    expect(currentText.includes(secondContent)).toBeTruthy();
+  });
+});

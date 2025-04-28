@@ -97,13 +97,34 @@ export class MongodbPersistence {
 
   /**
    * Create a Y.Doc instance with the data persistet in mongodb.
-   * Use this to temporarily create a Yjs document to sync changes or extract data.
+   * If a checkpoint is provided, returns the document state at that checkpoint.
    *
    * @param {string} docName
+   * @param {number} [checkpoint] Optional checkpoint clock to restore from
    * @return {Promise<Y.Doc>}
    */
-  getYDoc(docName) {
+  getYDoc(docName, checkpoint) {
     return this._transact(docName, async (db) => {
+      if (checkpoint !== undefined) {
+        // Try to get the document at the specified checkpoint
+        const checkpointDoc = await db.findOne({
+          ...U.createDocumentCheckpointKey(docName, checkpoint),
+        });
+
+        if (checkpointDoc?.value) {
+          // Create a doc from the checkpoint
+          const ydoc = new Y.Doc();
+          Y.applyUpdate(ydoc, checkpointDoc.value);
+          return ydoc;
+        }
+
+        // If checkpoint not found, log a warning and fall back to current state
+        console.warn(
+          `Checkpoint ${checkpoint} not found for document "${docName}". Using latest state.`,
+        );
+      }
+
+      // Get current doc state
       const updates = await U.getMongoUpdates(db, docName);
       const ydoc = new Y.Doc();
       ydoc.transact(() => {
@@ -132,6 +153,38 @@ export class MongodbPersistence {
    */
   storeUpdate(docName, update) {
     return this._transact(docName, (db) => U.storeUpdate(db, docName, update));
+  }
+
+  /**
+   * Create a checkpoint of the current document state that can be used
+   * to restore the document to this state later.
+   *
+   * @param {string} docName
+   * @return {Promise<number>} Returns the clock of the created checkpoint
+   */
+  checkpoint(docName) {
+    return this._transact(docName, async (db) => {
+      // Get the current document state
+      const updates = await U.getMongoUpdates(db, docName);
+      if (updates.length === 0) {
+        throw new Error(
+          `Cannot create checkpoint: Document "${docName}" does not exist`,
+        );
+      }
+
+      // Merge all updates to get current state
+      const { update } = U.mergeUpdates(updates);
+
+      // Get current clock
+      const clock = await U.getCurrentUpdateClock(db, docName);
+
+      // Store the checkpoint with its clock value
+      await db.put(U.createDocumentCheckpointKey(docName, clock), {
+        value: update,
+      });
+
+      return clock;
+    });
   }
 
   /**
