@@ -16,7 +16,8 @@
 	},
 	"scripts": {
 		"dist": "rollup -c && tsc",
-		"clean": "rm -rf dist",
+		"clean": "rimraf dist ./*.tsbuildinfo",
+		"clean-modules": "rimraf node_modules",
 		"test": "npm run dist && jest",
 		"lint": "npx eslint ./src/* && npx tsc",
 		"build": "npm run dist"
