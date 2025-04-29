@@ -114,7 +114,7 @@ export class MongodbPersistence {
         if (checkpointDoc?.value) {
           // Create a doc from the checkpoint
           const ydoc = new Y.Doc();
-          Y.applyUpdate(ydoc, checkpointDoc.value);
+          Y.applyUpdate(ydoc, checkpointDoc.value.buffer);
           return ydoc;
         }
 

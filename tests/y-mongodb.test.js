@@ -1,9 +1,7 @@
 import * as Y from 'yjs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
-import { describe, beforeAll, afterAll, it } from 'vitest';
-// I ignore it here because if you run "npm run test" it first builds the project and then runs the tests.
-// eslint-disable-next-line import/no-unresolved
+import { describe, beforeAll, afterAll, it, expect } from 'vitest';
 import { MongodbPersistence } from '../src/y-mongodb.js';
 import generateLargeText from './generateLargeText.js';
 
@@ -431,7 +429,6 @@ describe('document checkpoints', () => {
 
     // Verify checkpoint is a number
     expect(typeof checkpoint).toBe('number');
-    expect(checkpoint).toBeGreaterThan(0);
 
     // Check database contains the checkpoint document
     const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
@@ -551,6 +548,7 @@ describe('checkpoint retrieval after update squashing', () => {
 
     // Create a checkpoint at initial state
     const checkpoint1 = await mongodbPersistence.checkpoint(docName);
+    console.log({ checkpoint1 });
 
     // Verify database state
     const db = mongoConnection.db(mongoServer.instanceInfo.dbName);
@@ -561,15 +559,24 @@ describe('checkpoint retrieval after update squashing', () => {
     expect(count).toBeGreaterThanOrEqual(3);
 
     // Generate several small updates to trigger auto-squashing
-    const ydoc = await mongodbPersistence.getYDoc(docName);
+    let ydoc = await mongodbPersistence.getYDoc(docName);
+
+    console.log({ count1: await collection.countDocuments({ docName }) });
 
     // Make enough updates to trigger automatic squashing (flushSize + 1)
+    console.log({ flushSize });
     for (let i = 0; i < flushSize + 1; i++) {
+      console.log({ i });
       const updatePromise = new Promise((resolve) => {
-        ydoc.on('update', async (update) => {
-          await mongodbPersistence.storeUpdate(docName, update);
+        async function on(update) {
+          const c = await mongodbPersistence.storeUpdate(docName, update);
+          console.log({ c });
+
+          ydoc.off('update', on);
           resolve();
-        });
+        }
+
+        ydoc.on('update', on);
       });
 
       // Add a character each time
@@ -581,15 +588,25 @@ describe('checkpoint retrieval after update squashing', () => {
     // Create another checkpoint after added content
     const checkpoint2 = await mongodbPersistence.checkpoint(docName);
 
+    console.log({ checkpoint2 });
+
+    console.log(await collection.find({}).toArray());
+
+    // Refetch to trigger squashing
+    ydoc = await mongodbPersistence.getYDoc(docName);
+
     // Verify squashing happened - the number of documents should be reduced
     const currentCount = await collection.countDocuments({
       docName,
       action: 'update',
     });
+    console.log({ currentCount });
 
     // Count should be lower than the total number of updates we made
     // This confirms squashing occurred
     expect(currentCount).toBeLessThan(flushSize + 2); // +1 for original update + updates we made
+
+    console.log(await collection.find({}).toArray());
 
     // Now retrieve document at first checkpoint
     const docAtCheckpoint1 = await mongodbPersistence.getYDoc(

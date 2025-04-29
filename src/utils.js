@@ -9,7 +9,7 @@ export const PREFERRED_TRIM_SIZE = 400;
 const MAX_DOCUMENT_SIZE = 15000000; // ~15MB (plus space for metadata)
 
 /**
- * Remove all documents from db with Clock between $from and $to
+ * Remove all update documents from db with Clock between $from and $to
  *
  * @param {import('./mongo-adapter.js').MongoAdapter} db
  * @param {string} docName
@@ -19,6 +19,8 @@ const MAX_DOCUMENT_SIZE = 15000000; // ~15MB (plus space for metadata)
  */
 export const clearUpdatesRange = async (db, docName, from, to) =>
   db.delete({
+    version: 'v1',
+    action: 'update',
     docName,
     clock: {
       $gte: from,
