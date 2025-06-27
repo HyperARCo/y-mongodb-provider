@@ -32,20 +32,20 @@
     "url": "https://github.com/MaxNoetzold/y-mongodb-provider/issues"
   },
   "dependencies": {
-    "lib0": "^0.2.94",
-    "mongodb": "^6.7.0"
+    "lib0": "^0.2.108",
+    "mongodb": "^6.16.0"
   },
   "peerDependencies": {
     "yjs": "^13.6.15"
   },
   "devDependencies": {
-    "@types/node": "^20.14.2",
-    "mongodb-memory-server": "^9.5.0",
+    "@types/node": "^22.15.24",
+    "mongodb-memory-server": "^10.1.4",
     "npm-run-all": "^4.1.5",
     "tsup": "^8.3.5",
     "typescript": ">=5.4.5",
     "vitest": "^3.1.2",
-    "yjs": "^13.6.15"
+    "yjs": "^13.6.27"
   },
   "directories": {
     "src": "src",
