@@ -73,12 +73,6 @@ export const createDocumentMetaKey = (docName, metaKey) => ({
 });
 
 /**
- * @param {import('./mongo-adapter.js').MongoAdapter} db
- * @return {Promise<void>}
- */
-export const flushDB = (db) => db.flush();
-
-/**
  *
  * This function converts MongoDB updates to a buffer that can be processed by the application.
  * It handles both complete documents and large documents that have been split into smaller 'parts' due to MongoDB's size limit.

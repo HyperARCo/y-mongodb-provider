@@ -348,16 +348,6 @@ export class MongodbPersistence {
   }
 
   /**
-   * Delete the whole yjs mongodb
-   * @return {Promise<void>}
-   */
-  flushDB() {
-    return this._transact('global', async (db) => {
-      await U.flushDB(db);
-    });
-  }
-
-  /**
    * Closes open database connection
    * @returns {Promise<void>}
    */
