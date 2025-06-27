@@ -15,7 +15,7 @@ function getMongoDbDatabaseName(connectionString) {
 export class MongoAdapter {
   /**
    * Create a MongoAdapter instance.
-   * @param {string|{client: MongoClient, db: import('mongodb').Db}} dbConnection A MongoDB connection string or an object containing a MongoClient instance (`client`) and a database instance (`db`).
+   * @param {string | {client: MongoClient, db: import('mongodb').Db}} dbConnection A MongoDB connection string or an object containing a MongoClient instance (`client`) and a database instance (`db`).
    * @param {object} opts
    * @param {string} opts.collection Name of the collection where all documents are stored.
    * @param {boolean} opts.multipleCollections When set to true, each document gets an own
@@ -29,16 +29,18 @@ export class MongoAdapter {
     if (typeof dbConnection === 'string') {
       // Connection string logic
       const databaseName = getMongoDbDatabaseName(dbConnection);
-      this.client = new MongoClient(dbConnection);
-      this.db = this.client.db(databaseName);
+      const client = new MongoClient(dbConnection);
+      this.dbConnection = {
+        client,
+        db: client.db(databaseName),
+      };
     } else if (
       typeof dbConnection === 'object' &&
       dbConnection.client &&
       dbConnection.db
     ) {
       // Connection object logic
-      this.client = dbConnection.client;
-      this.db = dbConnection.db;
+      this.dbConnection = dbConnection;
     } else {
       throw new Error(
         'Invalid dbConnection. Must be a connection string or an object with client and db.',
@@ -80,7 +82,9 @@ export class MongoAdapter {
     /** @type {{ clock: 1 | -1, part: 1 | -1 }} */
     const sortQuery = reverse ? { clock: -1, part: 1 } : { clock: 1, part: 1 };
 
-    const collection = this.db.collection(this._getCollectionName(query));
+    const collection = this.dbConnection.db.collection(
+      this._getCollectionName(query),
+    );
     return collection.find(query, { limit, sort: sortQuery }).toArray();
   }
 
@@ -105,7 +109,9 @@ export class MongoAdapter {
       throw new Error('Document and version must be provided');
     }
 
-    const collection = this.db.collection(this._getCollectionName(query));
+    const collection = this.dbConnection.db.collection(
+      this._getCollectionName(query),
+    );
 
     await collection.updateOne(query, { $set: values }, { upsert: true });
     return this.findOne(query);
@@ -117,7 +123,9 @@ export class MongoAdapter {
    * @returns {Promise<import('mongodb').BulkWriteResult>} Contains status of the operation
    */
   delete(query) {
-    const collection = this.db.collection(this._getCollectionName(query));
+    const collection = this.dbConnection.db.collection(
+      this._getCollectionName(query),
+    );
 
     /*
 			Note from mongodb v4.7 release notes:
@@ -137,7 +145,7 @@ export class MongoAdapter {
    * Close connection to MongoDB instance.
    */
   async close() {
-    await this.client.close();
+    await this.dbConnection.client.close();
   }
 
   /**
@@ -145,16 +153,10 @@ export class MongoAdapter {
    * @returns {Promise<string[]>}
    */
   async getCollectionNames() {
-    const collectionInfos = await this.db.listCollections().toArray();
+    const collectionInfos = await this.dbConnection.db
+      .listCollections()
+      .toArray();
     return collectionInfos.map((c) => c.name);
-  }
-
-  /**
-   * Delete database
-   */
-  async flush() {
-    await this.db.dropDatabase();
-    await this.client.close();
   }
 
   /**
@@ -162,6 +164,6 @@ export class MongoAdapter {
    * @param {string} collectionName
    */
   dropCollection(collectionName) {
-    return this.db.collection(collectionName).drop();
+    return this.dbConnection.db.collection(collectionName).drop();
   }
 }
