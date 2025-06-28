@@ -36,7 +36,7 @@
     "mongodb": "^6.16.0"
   },
   "peerDependencies": {
-    "yjs": "^13.6.15"
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@types/node": "^22.15.24",
